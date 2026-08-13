@@ -13,12 +13,23 @@ interface CsvRow {
   Notes?: string;
 }
 
+export interface SkippedRow {
+  row: number; // 1-indexed data row (excludes header), matches what a spreadsheet user sees as row (n + 1)
+  sku?: string;
+  reason: string;
+}
+
+export interface ParseCsvResult {
+  products: ProductInput[];
+  skipped: SkippedRow[];
+}
+
 function clean(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
 }
 
-export function parseCatalogCsv(csvContent: string): ProductInput[] {
+export function parseCatalogCsv(csvContent: string): ParseCsvResult {
   const rows: CsvRow[] = parse(csvContent, {
     columns: true,
     skip_empty_lines: true,
@@ -26,15 +37,21 @@ export function parseCatalogCsv(csvContent: string): ProductInput[] {
   });
 
   const products: ProductInput[] = [];
+  const skipped: SkippedRow[] = [];
 
-  for (const row of rows) {
+  rows.forEach((row, i) => {
+    const rowNumber = i + 1;
     const sku = clean(row.SKU);
     const name = clean(row["Product Name"]);
     const photoUrl = clean(row.Photo);
 
-    // Quirky export, quirks included: skip rows missing the fields we treat as required.
     if (!sku || !name || !photoUrl) {
-      continue;
+      const missing: string[] = [];
+      if (!sku) missing.push("SKU");
+      if (!name) missing.push("Product Name");
+      if (!photoUrl) missing.push("Photo");
+      skipped.push({ row: rowNumber, sku, reason: `missing ${missing.join(", ")}` });
+      return;
     }
 
     products.push({
@@ -48,7 +65,7 @@ export function parseCatalogCsv(csvContent: string): ProductInput[] {
       shotIdea: clean(row["Shot Idea"]),
       notes: clean(row.Notes),
     });
-  }
+  });
 
-  return products;
+  return { products, skipped };
 }

@@ -28,13 +28,13 @@ catalogRouter.post("/catalog/sync", upload.single("file"), async (req, res) => {
   }
 
   const csvContent = req.file.buffer.toString("utf-8");
-  const products = parseCatalogCsv(csvContent);
+  const { products, skipped } = parseCatalogCsv(csvContent);
 
   if (products.length === 0) {
-    res.status(400).json({ error: "no_valid_rows" });
+    res.status(400).json({ error: "no_valid_rows", skipped });
     return;
   }
 
   const result = await upsertProducts(products);
-  res.json({ synced: result.count });
+  res.json({ synced: result.count, skipped });
 });

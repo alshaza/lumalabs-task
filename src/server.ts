@@ -44,9 +44,12 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
 async function importInitialCatalog() {
   try {
     const csvContent = await readFile(env.catalogCsvPath, "utf-8");
-    const products = parseCatalogCsv(csvContent);
+    const { products, skipped } = parseCatalogCsv(csvContent);
     const result = await upsertProducts(products);
     console.log(`Imported ${result.count} products from ${env.catalogCsvPath}`);
+    if (skipped.length > 0) {
+      console.warn(`Skipped ${skipped.length} row(s):`, skipped);
+    }
   } catch (err) {
     console.warn(`Skipping initial catalog import (${env.catalogCsvPath}):`, (err as Error).message);
   }

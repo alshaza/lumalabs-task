@@ -83,6 +83,11 @@ slackApp.view(SHOT_REQUEST_CALLBACK_ID, async ({ ack, view, body, client, logger
   }
 
   try {
+    await client.chat.postMessage({
+      channel: requestedBy,
+      text: `Generating a styled shot for ${sku} — this can take a minute or two, I'll DM you when it's ready.`,
+    });
+
     const request = await createRequest({ sku, shotIdea, requestedBy });
     const outputUrls = Array.isArray(request.outputs)
       ? (request.outputs as { url: string }[]).map((o) => o.url)
@@ -144,24 +149,48 @@ slackApp.event("message", async ({ event, client, logger }) => {
   if (!csvFile) return;
 
   try {
+    await client.chat.postMessage({
+      channel: msg.channel,
+      text: `Syncing catalog from *${csvFile.name}*...`,
+    });
+
     const response = await fetch(csvFile.url_private, {
       headers: { Authorization: `Bearer ${env.slackBotToken}` },
     });
+    if (!response.ok) {
+      throw new Error(`Couldn't download the file from Slack (HTTP ${response.status})`);
+    }
     const csvContent = await response.text();
-    const products = parseCatalogCsv(csvContent);
+    const { products, skipped } = parseCatalogCsv(csvContent);
 
     if (products.length === 0) {
-      await client.chat.postMessage({ channel: msg.channel, text: "That CSV didn't have any valid rows." });
+      await client.chat.postMessage({
+        channel: msg.channel,
+        text: `That CSV didn't have any valid rows. ${skipped.length} row(s) were skipped:\n${formatSkipped(skipped)}`,
+      });
       return;
     }
 
     const result = await upsertProducts(products);
-    await client.chat.postMessage({
-      channel: msg.channel,
-      text: `Catalog synced — ${result.count} products updated.`,
-    });
+
+    const lines = [`Catalog synced — ${result.count} of ${products.length + skipped.length} product rows updated from *${csvFile.name}*.`];
+    if (skipped.length > 0) {
+      lines.push(`Skipped ${skipped.length} row(s), fix and re-upload to include them:\n${formatSkipped(skipped)}`);
+    }
+
+    await client.chat.postMessage({ channel: msg.channel, text: lines.join("\n") });
   } catch (err) {
     logger.error("Failed to sync catalog from Slack file", err);
-    await client.chat.postMessage({ channel: msg.channel, text: "Couldn't sync that CSV — check the format and try again." });
+    await client.chat.postMessage({
+      channel: msg.channel,
+      text: `Couldn't sync that CSV: ${(err as Error).message}`,
+    });
   }
 });
+
+function formatSkipped(skipped: { row: number; sku?: string; reason: string }[]): string {
+  return skipped
+    .slice(0, 10)
+    .map((s) => `• row ${s.row}${s.sku ? ` (${s.sku})` : ""}: ${s.reason}`)
+    .join("\n") + (skipped.length > 10 ? `\n...and ${skipped.length - 10} more` : "");
+}
