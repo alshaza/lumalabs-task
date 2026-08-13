@@ -1,0 +1,11 @@
+node_modules
+dist
+.git
+.claude
+.agents
+*.md
+video.md
+submit.sh
+.env
+.env.local
+.take-home-token
