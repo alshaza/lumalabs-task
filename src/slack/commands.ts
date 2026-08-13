@@ -140,6 +140,11 @@ function buildShotRequestView({ products, selectedSku, shotIdeaValue, recentIdea
       selectedSku: selectedSku ?? "",
       recentIdeas: recentIdeas?.map((r) => r.shotIdea) ?? [],
       approvedIdeas: approvedPrompts?.map((p) => p.shotIdea) ?? [],
+      // Slack doesn't reliably reflect a plain_text_input's initial_value (set via
+      // views.update when someone picks a reuse/approved prompt) back in
+      // view.state.values on submission unless the user edits the field themselves —
+      // stash it here so the submit handler has a fallback.
+      prefilledShotIdea: shotIdeaValue ?? "",
     }),
     title: { type: "plain_text" as const, text: "Request a styled shot" },
     submit: { type: "plain_text" as const, text: "Generate" },
@@ -168,6 +173,7 @@ interface ShotRequestMetadata {
   selectedSku?: string;
   recentIdeas?: string[];
   approvedIdeas?: string[];
+  prefilledShotIdea?: string;
 }
 
 async function loadModalDependencies(sku: string) {
@@ -276,8 +282,13 @@ slackApp.action("approved_prompt_select", async ({ ack, body, client, logger }) 
 slackApp.view(SHOT_REQUEST_CALLBACK_ID, async ({ ack, view, body, client, logger }) => {
   await ack();
 
+  const metadata = JSON.parse(view.private_metadata || "{}") as ShotRequestMetadata;
+
   const sku = view.state.values.product_block?.product_select?.selected_option?.value;
-  const shotIdea = view.state.values.shot_idea_block?.shot_idea_input?.value;
+  // Fall back to the server-stashed prefill: Slack doesn't reliably return a
+  // plain_text_input's initial_value (set via views.update for reuse/approved prompts)
+  // in state.values unless the user edits the field themselves.
+  const shotIdea = view.state.values.shot_idea_block?.shot_idea_input?.value || metadata.prefilledShotIdea;
   const requestedBy = body.user.id;
 
   if (!sku || !shotIdea) {
