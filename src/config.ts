@@ -7,6 +7,8 @@ export interface Env {
   slackSigningSecret: string;
   catalogCsvPath: string;
   lumaApiKey: string;
+  slackAdminUserId: string;
+  slackApprovalChannelId: string;
 }
 
 function required(name: string): string {
@@ -24,4 +26,6 @@ export const env: Env = {
   slackSigningSecret: process.env.SLACK_SIGNING_SECRET ?? "",
   catalogCsvPath: process.env.CATALOG_CSV_PATH ?? "./data/catalog.csv",
   lumaApiKey: process.env.LUMA_AGENTS_API_KEY ?? "",
+  slackAdminUserId: process.env.SLACK_ADMIN_USER_ID ?? "",
+  slackApprovalChannelId: process.env.SLACK_APPROVAL_CHANNEL_ID ?? "",
 };

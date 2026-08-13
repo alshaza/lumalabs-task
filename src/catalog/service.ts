@@ -13,7 +13,6 @@ export async function upsertProducts(products: ProductInput[]): Promise<{ count:
         material: product.material,
         price: product.price,
         photoUrl: product.photoUrl,
-        shotIdea: product.shotIdea,
         notes: product.notes,
       },
     });

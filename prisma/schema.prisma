@@ -8,17 +8,17 @@ datasource db {
 }
 
 model Product {
-  sku       String              @id
-  name      String
-  category  String?
-  color     String?
-  material  String?
-  price     String?
-  photoUrl  String
-  shotIdea  String?
-  notes     String?
-  updatedAt DateTime            @updatedAt
-  requests  GenerationRequest[]
+  sku             String              @id
+  name            String
+  category        String?
+  color           String?
+  material        String?
+  price           String?
+  photoUrl        String
+  notes           String?
+  updatedAt       DateTime            @updatedAt
+  requests        GenerationRequest[]
+  acceptedPrompts AcceptedPrompt[]
 }
 
 model GenerationRequest {
@@ -31,5 +31,24 @@ model GenerationRequest {
   outputs     Json?
   createdAt   DateTime @default(now())
 
+  @@index([sku])
+}
+
+// A shot idea that's been accepted for a product — either seeded from the catalog CSV
+// (source "csv", no specific generated candidate behind it) or approved by Ellie off a
+// real generated candidate (source "slack"). Replaces the old single Product.shotIdea
+// column now that a product can have more than one accepted prompt.
+model AcceptedPrompt {
+  id         String   @id @default(uuid())
+  sku        String
+  product    Product  @relation(fields: [sku], references: [sku])
+  shotIdea   String
+  imageUrl   String?
+  source     String
+  approvedBy String
+  requestId  String?
+  createdAt  DateTime @default(now())
+
+  @@unique([sku, shotIdea])
   @@index([sku])
 }

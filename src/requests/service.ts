@@ -49,3 +49,24 @@ export function listRecentRequests(limit = 20) {
     include: { product: { select: { name: true } } },
   });
 }
+
+// Past shot ideas for a product, most-recent-first, deduped by exact text so the same
+// prompt run twice doesn't crowd out other people's ideas in the reuse list.
+export async function listRecentShotIdeasForSku(sku: string, limit = 5) {
+  const requests = await prisma.generationRequest.findMany({
+    where: { sku },
+    orderBy: { createdAt: "desc" },
+    select: { shotIdea: true, requestedBy: true, createdAt: true },
+    take: 50,
+  });
+
+  const seen = new Set<string>();
+  const deduped: typeof requests = [];
+  for (const r of requests) {
+    if (seen.has(r.shotIdea)) continue;
+    seen.add(r.shotIdea);
+    deduped.push(r);
+    if (deduped.length >= limit) break;
+  }
+  return deduped;
+}

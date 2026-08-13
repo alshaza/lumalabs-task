@@ -1,5 +1,5 @@
 import { parse } from "csv-parse/sync";
-import type { ProductInput } from "./types.js";
+import type { CsvShotIdea, ProductInput } from "./types.js";
 
 interface CsvRow {
   SKU?: string;
@@ -21,6 +21,7 @@ export interface SkippedRow {
 
 export interface ParseCsvResult {
   products: ProductInput[];
+  shotIdeas: CsvShotIdea[];
   skipped: SkippedRow[];
 }
 
@@ -37,6 +38,7 @@ export function parseCatalogCsv(csvContent: string): ParseCsvResult {
   });
 
   const products: ProductInput[] = [];
+  const shotIdeas: CsvShotIdea[] = [];
   const skipped: SkippedRow[] = [];
 
   rows.forEach((row, i) => {
@@ -62,10 +64,14 @@ export function parseCatalogCsv(csvContent: string): ParseCsvResult {
       material: clean(row.Material),
       price: clean(row.Price),
       photoUrl,
-      shotIdea: clean(row["Shot Idea"]),
       notes: clean(row.Notes),
     });
+
+    const shotIdea = clean(row["Shot Idea"]);
+    if (shotIdea) {
+      shotIdeas.push({ sku, shotIdea });
+    }
   });
 
-  return { products, skipped };
+  return { products, shotIdeas, skipped };
 }

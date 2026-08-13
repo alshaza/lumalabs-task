@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import express from "express";
 import { env } from "./config.js";
 import { prisma } from "./db.js";
+import { upsertAcceptedPromptsFromCsv } from "./catalog/acceptedPrompts.js";
 import { catalogRouter } from "./catalog/routes.js";
 import { parseCatalogCsv } from "./catalog/parseCsv.js";
 import { upsertProducts } from "./catalog/service.js";
@@ -45,9 +46,12 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
 async function importInitialCatalog() {
   try {
     const csvContent = await readFile(env.catalogCsvPath, "utf-8");
-    const { products, skipped } = parseCatalogCsv(csvContent);
+    const { products, shotIdeas, skipped } = parseCatalogCsv(csvContent);
     const result = await upsertProducts(products);
-    console.log(`Imported ${result.count} products from ${env.catalogCsvPath}`);
+    const promptResult = await upsertAcceptedPromptsFromCsv(shotIdeas);
+    console.log(
+      `Imported ${result.count} products (${promptResult.count} accepted prompts) from ${env.catalogCsvPath}`
+    );
     if (skipped.length > 0) {
       console.warn(`Skipped ${skipped.length} row(s):`, skipped);
     }

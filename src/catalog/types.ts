@@ -6,6 +6,10 @@ export interface ProductInput {
   material?: string;
   price?: string;
   photoUrl: string;
-  shotIdea?: string;
   notes?: string;
+}
+
+export interface CsvShotIdea {
+  sku: string;
+  shotIdea: string;
 }

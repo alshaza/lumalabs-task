@@ -11,6 +11,8 @@ Fill in:
 - `SLACK_BOT_TOKEN` / `SLACK_SIGNING_SECRET` — from the Slack app (see §3). Safe to leave blank for local API-only work; `/slack/*` routes only mount once both are set.
 - `LUMA_AGENTS_API_KEY` — from docs.agents.lumalabs.ai. Also required in `.env.local` if you're relying on that file instead (see `.env.local`'s existing comment).
 - `CATALOG_CSV_PATH` — defaults to `./data/catalog.csv`, no change needed.
+- `SLACK_ADMIN_USER_ID` — Ellie's Slack user ID (find it via her profile → "Copy member ID"). Only this user can click Approve/Disapprove; safe to leave blank locally, the buttons just won't work for anyone until it's set.
+- `SLACK_APPROVAL_CHANNEL_ID` — the channel the bot posts candidates into once a requester clicks "Send to Ellie for approval". Safe to leave blank for local API-only work.
 
 ## 2. Run the backend
 

@@ -4,7 +4,7 @@ import { slackApp } from "./app.js";
 const STATUS_EMOJI: Record<string, string> = {
   pending: "⏳",
   generating: "🎨",
-  ready: "✅",
+  completed: "✅",
   failed: "⚠️",
 };
 
