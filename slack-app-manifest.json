@@ -35,7 +35,8 @@
         "files:read",
         "files:write",
         "channels:history",
-        "users:read"
+        "users:read",
+        "im:write"
       ]
     },
     "pkce_enabled": true
