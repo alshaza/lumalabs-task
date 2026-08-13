@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add *)",
+      "Bash(npm uninstall *)",
+      "Bash(npx vitest *)",
+      "Bash(npx prisma *)",
+      "Bash(./node_modules/.bin/prettier --write content/faq.ts)",
+      "Bash(curl -s http://localhost:3411/pricing)",
+      "Bash(curl -s http://localhost:3411/)",
+      "Bash(curl -s http://localhost:3411/faq)",
+      "Bash(taskkill //PID 41632 //F)",
+      "Bash(git status *)",
+      "Bash(git commit *)",
+      "Bash(git push *)"
+    ]
+  },
+  "worktree": {
+    "bgIsolation": "none"
+  },
+  "enabledPlugins": {
+    "ponytail@ponytail": true,
+    "andrej-karpathy-skills@karpathy-skills": true
+  }
+}
