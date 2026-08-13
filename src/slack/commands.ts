@@ -281,6 +281,15 @@ slackApp.view(SHOT_REQUEST_CALLBACK_ID, async ({ ack, view, body, client, logger
   const requestedBy = body.user.id;
 
   if (!sku || !shotIdea) {
+    logger.error("Ignoring shot-request submission with missing sku/shotIdea", {
+      sku,
+      hasShotIdea: Boolean(shotIdea),
+      blockIds: Object.keys(view.state.values),
+    });
+    await client.chat.postMessage({
+      channel: requestedBy,
+      text: "Couldn't read your product/shot idea from that submission — please try `/shot-request` again.",
+    });
     return;
   }
 
