@@ -33,6 +33,7 @@
         "commands",
         "chat:write",
         "files:read",
+        "files:write",
         "channels:history",
         "users:read"
       ]

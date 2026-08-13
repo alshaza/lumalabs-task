@@ -290,6 +290,15 @@ slackApp.view(SHOT_REQUEST_CALLBACK_ID, async ({ ack, view, body, client, logger
       text: `Generating a styled shot for ${sku} — this can take a minute or two, I'll DM you when it's ready.`,
     });
 
+    // chat.postMessage accepts a raw user ID and auto-opens the DM, but files.uploadV2's
+    // channel_id does not — it requires an actual conversation ID (C/G/D/Z prefix), so we
+    // need to resolve the DM channel explicitly before uploading anything into it.
+    const dmChannel = await client.conversations.open({ users: requestedBy });
+    const dmChannelId = dmChannel.channel?.id;
+    if (!dmChannelId) {
+      throw new Error(`Could not open a DM channel with ${requestedBy}`);
+    }
+
     const request = await createRequest({ sku, shotIdea, requestedBy });
     const outputUrls = Array.isArray(request.outputs)
       ? (request.outputs as { url: string }[]).map((o) => o.url)
@@ -314,7 +323,7 @@ slackApp.view(SHOT_REQUEST_CALLBACK_ID, async ({ ack, view, body, client, logger
     const uploadedImages: { fileId: string; permalink: string; urlPrivate: string }[] = [];
     for (const [i, url] of outputUrls.entries()) {
       const uploaded = await uploadImageFromUrl(client, {
-        channelId: requestedBy,
+        channelId: dmChannelId,
         url,
         filename: `${sku}-candidate-${i + 1}.jpg`,
         initialComment: `${sku} — candidate ${i + 1}: "${shotIdea}"`,
