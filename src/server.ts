@@ -8,7 +8,10 @@ import { upsertProducts } from "./catalog/service.js";
 import { requestsRouter } from "./requests/routes.js";
 
 const app = express();
-app.use(express.json());
+// Scoped to /api only — Bolt's ExpressReceiver needs the raw, unconsumed request
+// body for Slack's signature verification. A global express.json() here would
+// consume the body before Slack requests reach the receiver, breaking auth.
+app.use("/api", express.json());
 
 app.get("/", (_req, res) => {
   res.send("ok");
