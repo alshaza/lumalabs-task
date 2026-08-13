@@ -457,6 +457,9 @@ async function requireAdmin(
   channel: string,
   client: Parameters<Parameters<typeof slackApp.action>[1]>[0]["client"]
 ): Promise<boolean> {
+  if (!env.restrictApprovalToAdmin) {
+    return true;
+  }
   if (env.slackAdminUserId && userId === env.slackAdminUserId) {
     return true;
   }

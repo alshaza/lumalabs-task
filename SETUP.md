@@ -10,9 +10,9 @@ Fill in:
 - `DATABASE_URL` — leave the docker-compose default if running via Docker.
 - `SLACK_BOT_TOKEN` / `SLACK_SIGNING_SECRET` — from the Slack app (see §3). Safe to leave blank for local API-only work; `/slack/*` routes only mount once both are set.
 - `LUMA_AGENTS_API_KEY` — from docs.agents.lumalabs.ai. Also required in `.env.local` if you're relying on that file instead (see `.env.local`'s existing comment).
-- `CATALOG_CSV_PATH` — defaults to `./data/catalog.csv`, no change needed.
 - `SLACK_ADMIN_USER_ID` — Ellie's Slack user ID (find it via her profile → "Copy member ID"). Only this user can click Approve/Disapprove; safe to leave blank locally, the buttons just won't work for anyone until it's set.
 - `SLACK_APPROVAL_CHANNEL_ID` — the channel the bot posts candidates into once a requester clicks "Send to Ellie for approval". Safe to leave blank for local API-only work.
+- `SLACK_RESTRICT_APPROVAL_TO_ADMIN` — defaults to `false` (anyone can click Approve/Disapprove, for easy testing). Set to `true` to actually restrict it to `SLACK_ADMIN_USER_ID` — **must be `true` in any real deploy**, the unrestricted default is a testing convenience only.
 
 ## 2. Run the backend
 
@@ -20,7 +20,7 @@ Fill in:
 ```
 docker compose up --build
 ```
-Starts Postgres, runs Prisma migrations, imports `data/catalog.csv`, serves on `:3000`.
+Starts Postgres, runs Prisma migrations, serves on `:3000`. The DB starts empty — there's no boot-time file import anymore (see §4); products only get in via a Slack-uploaded CSV.
 
 **Local, no Docker** (needs a reachable Postgres via `DATABASE_URL`):
 ```
@@ -55,6 +55,6 @@ The app is defined declaratively in `slack-app-manifest.json` — that file is t
 
 **Request URLs point at the deployed instance** (`https://lumalabs-task-production.up.railway.app/...`), not localhost — Slack can't reach a local dev server without a tunnel (e.g. ngrok), which isn't set up in this repo. Slash commands / events / interactivity only work end-to-end against the deployed app.
 
-## 4. Catalog re-sync
+## 4. Catalog import / re-sync
 
-Once the Slack app is installed, DM the bot with `/catalog-sync` and attach a CSV (same columns as `data/catalog.csv`) to re-sync — upserts by SKU, safe to re-run.
+The only way products get into the DB is via a Slack-uploaded CSV — once the Slack app is installed, DM the bot with `/catalog-sync` and attach a CSV (same columns as `data/catalog.csv`, which is now purely a sample/format reference and a write-back target, not something the server reads at startup) to import or re-sync — upserts by SKU, safe to re-run.
