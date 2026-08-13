@@ -54,7 +54,7 @@ New catalog exports (e.g. the 40-product drop) come in via a Slack slash command
 
 Implemented: catalog CRUD + CSV upsert-by-SKU sync, the full request lifecycle (`POST /api/requests` → `GET /api/requests/:id`), and Slack handlers (`/shot-request` modal → DM with result; `/catalog-sync` → prompts for a file share, synced via a `message` event listener since Slack slash commands can't carry attachments — a wrinkle the original plan glossed over). Verified end-to-end against the sample 40-product CSV: health check, product list/lookup, idempotent re-sync, and a full create-request round trip.
 
-**Generation is intentionally stubbed** (`src/generation/lumaClient.ts`) — it echoes the source photo back instead of calling Luma, so the whole pipeline (Slack → request → "generated" image → DM) is provable without spending anything, while the real Luma Agents API integration is being scoped separately. The function signature (`{ sourceImageUrl, prompt } → { status, outputs[].url }`) is already the real contract, so wiring up the actual API call touches only this one file.
+**Generation is live** (`src/generation/lumaClient.ts`) — calls the real Luma Agents API (`POST /v1/generations`, `type: "image_edit"`, `model: "uni-1"`), polls `GET /v1/generations/{id}` every 2s up to a 2-minute timeout, per docs.agents.lumalabs.ai. The API returns one image per call, so "2–3 candidates" (scope ledger) means firing 2 parallel `image_edit` calls per request and merging their outputs — not a single call with a count param, since the API doesn't support that. If some candidates fail and others succeed, we still return the successful ones; only an all-fail case marks the request `failed`. Slack DM now renders every candidate image, not just the first. Requires `LUMA_AGENTS_API_KEY` set (Railway + local `.env`); the function signature/contract from the earlier stub was preserved so no upstream code (request service, routes, Slack handlers) needed to change beyond rendering multiple images.
 
 **Repo layout: backend lives at repo root, not `backend/`.** Originally built under `backend/`, but Railway's GitHub-integration deploy builds from the repo root by default and doesn't auto-detect a Dockerfile in a subdirectory — it needs "Root Directory" set explicitly in the dashboard, and the first deploy failed without it. Moving `package.json`/`Dockerfile`/`docker-compose.yml`/`src/`/`prisma/` to the repo root sidesteps that entirely: Railway (and anyone else) finds the Dockerfile where it looks by default. `data/catalog.csv` was already at the repo root, so `CATALOG_CSV_PATH=./data/catalog.csv` needed no change. Re-verified end-to-end after the move (`docker compose up --build` from root, health check + product list + request round-trip all still pass).
 
@@ -62,7 +62,11 @@ Not yet done: real Luma generation, Slack app not yet created in a workspace (se
 
 ## Unit economics
 
-*To be filled in once generation is wired up and we have real Luma pricing/latency numbers from a live run — not estimating this ahead of the actual API calls.*
+Per docs.agents.lumalabs.ai pricing: `uni-1` image editing is **$0.0434/image**, `uni-1-max` is **$0.1030/image**. We default to `uni-1` (cheaper; `uni-1-max` is an easy env-level swap in `lumaClient.ts` if quality demands it).
+
+- **Per request (2 candidates, uni-1): ~$0.0868.** This is the real cost floor of every `/shot-request` submission, since both candidates fire in parallel unconditionally — there's no cheaper single-candidate path today.
+- **40-product drop, one shot idea each: ~$3.47** if every product gets exactly one request. Real usage will be higher since requesters can re-run a shot idea if they don't like either candidate.
+- **Where budget actually leaks:** not per-image cost, but *repeat requests* — a requester unhappy with both candidates just runs `/shot-request` again, doubling cost with no guardrail today. Nothing currently caps retries per SKU or warns a requester that they're about to spend again. Worth a v2 guardrail (e.g. show a re-generate confirmation, or track spend per SKU) once real usage data exists.
 
 ## What breaks first under pressure
 

@@ -84,21 +84,23 @@ slackApp.view(SHOT_REQUEST_CALLBACK_ID, async ({ ack, view, body, client, logger
 
   try {
     const request = await createRequest({ sku, shotIdea, requestedBy });
-    const outputUrl = Array.isArray(request.outputs)
-      ? (request.outputs as { url: string }[])[0]?.url
-      : undefined;
+    const outputUrls = Array.isArray(request.outputs)
+      ? (request.outputs as { url: string }[]).map((o) => o.url)
+      : [];
 
     await client.chat.postMessage({
       channel: requestedBy,
-      text: `Your styled shot for ${sku} is ready.`,
+      text: `Your styled shot${outputUrls.length > 1 ? "s" : ""} for ${sku} ${outputUrls.length > 1 ? "are" : "is"} ready.`,
       blocks: [
         {
           type: "section",
           text: { type: "mrkdwn", text: `*${sku}* — "${shotIdea}"\nStatus: *${request.status}*` },
         },
-        ...(outputUrl
-          ? [{ type: "image" as const, image_url: outputUrl, alt_text: shotIdea }]
-          : []),
+        ...outputUrls.map((url, i) => ({
+          type: "image" as const,
+          image_url: url,
+          alt_text: `${shotIdea} (candidate ${i + 1})`,
+        })),
         {
           type: "context",
           elements: [
