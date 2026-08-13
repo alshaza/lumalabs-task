@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../db.js";
 import { getProductBySku } from "../catalog/service.js";
 import { generateImage } from "../generation/lumaClient.js";
@@ -40,6 +41,12 @@ export async function createRequest(input: CreateRequestInput) {
 
 export function getRequestById(id: string) {
   return prisma.generationRequest.findUnique({ where: { id } });
+}
+
+// Called once the raw (short-lived) Luma output URLs have been re-uploaded to Slack, so
+// the persisted record points at durable Slack files instead of Luma's temporary ones.
+export function updateRequestOutputs(id: string, outputs: Prisma.InputJsonValue) {
+  return prisma.generationRequest.update({ where: { id }, data: { outputs } });
 }
 
 export function listRecentRequests(limit = 20) {

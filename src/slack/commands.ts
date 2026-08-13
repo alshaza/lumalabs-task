@@ -12,17 +12,23 @@ import {
   createRequest,
   listRecentShotIdeasForSku,
   ProductNotFoundError,
+  updateRequestOutputs,
 } from "../requests/service.js";
 import { slackApp } from "./app.js";
+import { reuploadSlackFile, uploadImageFromUrl } from "./files.js";
 
 const SHOT_REQUEST_CALLBACK_ID = "shot_request_submit";
 const REUSE_PROMPT_NONE = "__none__";
 
+// urlPrivate is only ever re-fetched by our own bot (Authorization header, see
+// files.ts) to re-upload elsewhere — it's not a public link. permalink is the
+// human-viewable Slack link, safe to store as AcceptedPrompt.imageUrl.
 interface SendToEllieValue {
   requestId: string;
   sku: string;
   shotIdea: string;
-  imageUrl: string;
+  permalink: string;
+  urlPrivate: string;
 }
 
 interface SelectOption {
@@ -300,20 +306,32 @@ slackApp.view(SHOT_REQUEST_CALLBACK_ID, async ({ ack, view, body, client, logger
       ],
     });
 
-    // Each candidate goes out as its own message (not bundled into one) so it can be
-    // forwarded/shared on its own — forwarding a multi-image message forwards all of it.
-    // Each also gets a "Send to Ellie" button that posts it into the approval channel.
+    // Luma's output URLs are temporary/signed and eventually stop resolving — re-upload
+    // each one to Slack immediately as a real file so it survives. Each candidate goes
+    // out as its own file-share message (not bundled into one) so it can be
+    // forwarded/shared on its own, plus a small follow-up message with a "Send to
+    // Ellie" button (file-share messages can't carry interactive Block Kit elements).
+    const uploadedImages: { fileId: string; permalink: string; urlPrivate: string }[] = [];
     for (const [i, url] of outputUrls.entries()) {
-      const sendValue: SendToEllieValue = { requestId: request.id, sku, shotIdea, imageUrl: url };
+      const uploaded = await uploadImageFromUrl(client, {
+        channelId: requestedBy,
+        url,
+        filename: `${sku}-candidate-${i + 1}.jpg`,
+        initialComment: `${sku} — candidate ${i + 1}: "${shotIdea}"`,
+      });
+      uploadedImages.push(uploaded);
+
+      const sendValue: SendToEllieValue = {
+        requestId: request.id,
+        sku,
+        shotIdea,
+        permalink: uploaded.permalink,
+        urlPrivate: uploaded.urlPrivate,
+      };
       await client.chat.postMessage({
         channel: requestedBy,
-        text: `${sku} — candidate ${i + 1}`,
+        text: `Send candidate ${i + 1} to Ellie?`,
         blocks: [
-          {
-            type: "image",
-            image_url: url,
-            alt_text: `${shotIdea} (candidate ${i + 1})`,
-          },
           {
             type: "actions",
             block_id: "send_to_ellie_block",
@@ -321,13 +339,20 @@ slackApp.view(SHOT_REQUEST_CALLBACK_ID, async ({ ack, view, body, client, logger
               {
                 type: "button",
                 action_id: "send_to_ellie",
-                text: { type: "plain_text", text: "Send to Ellie for approval" },
+                text: { type: "plain_text", text: `Send candidate ${i + 1} to Ellie for approval` },
                 value: JSON.stringify(sendValue),
               },
             ],
           },
         ],
       });
+    }
+
+    // Persist the durable Slack file references in place of Luma's temporary URLs, so
+    // anything reading this request later (Home tab, re-approval, etc.) doesn't hit a
+    // dead link.
+    if (uploadedImages.length > 0) {
+      await updateRequestOutputs(request.id, uploadedImages);
     }
 
     await client.chat.postMessage({
@@ -375,28 +400,31 @@ slackApp.action("send_to_ellie", async ({ ack, body, client, logger }) => {
   const payload = JSON.parse(action.value) as SendToEllieValue;
 
   try {
+    // Swap this button message to a static "sent" state immediately — that swap is the
+    // double-send guard, not a separate DB flag. The original candidate file message
+    // (posted separately, right above this one) is left untouched.
     await client.chat.update({
       channel: body.channel!.id!,
       ts: body.message!.ts!,
       text: `${payload.sku} — sent to Ellie for approval`,
-      blocks: [
-        { type: "image", image_url: payload.imageUrl, alt_text: `${payload.shotIdea} candidate` },
-        { type: "context", elements: [{ type: "mrkdwn", text: "✅ Sent to Ellie for approval" }] },
-      ],
+      blocks: [{ type: "context", elements: [{ type: "mrkdwn", text: "✅ Sent to Ellie for approval" }] }],
     });
+
+    // Re-upload a fresh copy into the approval channel rather than depending on the
+    // requester's DM copy staying reachable — see files.ts.
+    const uploaded = await reuploadSlackFile(client, {
+      channelId: env.slackApprovalChannelId,
+      urlPrivate: payload.urlPrivate,
+      filename: `${payload.sku}-approval.jpg`,
+      initialComment: `New shot idea for ${payload.sku} awaiting approval\n*${payload.sku}*\n"${payload.shotIdea}"\nRequested by <@${body.user.id}>`,
+    });
+
+    const approvalValue: SendToEllieValue = { ...payload, permalink: uploaded.permalink, urlPrivate: uploaded.urlPrivate };
 
     await client.chat.postMessage({
       channel: env.slackApprovalChannelId,
-      text: `New shot idea for ${payload.sku} awaiting approval`,
+      text: `Approve or disapprove this shot idea for ${payload.sku}?`,
       blocks: [
-        {
-          type: "section",
-          text: {
-            type: "mrkdwn",
-            text: `*${payload.sku}*\n"${payload.shotIdea}"\nRequested by <@${body.user.id}>`,
-          },
-        },
-        { type: "image", image_url: payload.imageUrl, alt_text: payload.shotIdea },
         {
           type: "actions",
           block_id: "approval_actions",
@@ -406,14 +434,14 @@ slackApp.action("send_to_ellie", async ({ ack, body, client, logger }) => {
               action_id: "approve_prompt",
               style: "primary",
               text: { type: "plain_text", text: "Approve" },
-              value: action.value,
+              value: JSON.stringify(approvalValue),
             },
             {
               type: "button",
               action_id: "disapprove_prompt",
               style: "danger",
               text: { type: "plain_text", text: "Disapprove" },
-              value: action.value,
+              value: JSON.stringify(approvalValue),
             },
           ],
         },
@@ -459,7 +487,7 @@ slackApp.action("approve_prompt", async ({ ack, body, client, logger }) => {
     await upsertAcceptedPrompt({
       sku: payload.sku,
       shotIdea: payload.shotIdea,
-      imageUrl: payload.imageUrl,
+      imageUrl: payload.permalink,
       source: "slack",
       approvedBy: body.user.id,
       requestId: payload.requestId,
@@ -476,8 +504,7 @@ slackApp.action("approve_prompt", async ({ ack, body, client, logger }) => {
       ts: body.message!.ts!,
       text: `${payload.sku} — approved`,
       blocks: [
-        { type: "section", text: { type: "mrkdwn", text: `*${payload.sku}*\n"${payload.shotIdea}"` } },
-        { type: "image", image_url: payload.imageUrl, alt_text: payload.shotIdea },
+        { type: "section", text: { type: "mrkdwn", text: `*${payload.sku}*\n"${payload.shotIdea}"\n<${payload.permalink}|View image>` } },
         { type: "context", elements: [{ type: "mrkdwn", text: "✅ Approved by Ellie" }] },
       ],
     });
@@ -504,8 +531,7 @@ slackApp.action("disapprove_prompt", async ({ ack, body, client, logger }) => {
       ts: body.message!.ts!,
       text: `${payload.sku} — rejected`,
       blocks: [
-        { type: "section", text: { type: "mrkdwn", text: `*${payload.sku}*\n"${payload.shotIdea}"` } },
-        { type: "image", image_url: payload.imageUrl, alt_text: payload.shotIdea },
+        { type: "section", text: { type: "mrkdwn", text: `*${payload.sku}*\n"${payload.shotIdea}"\n<${payload.permalink}|View image>` } },
         { type: "context", elements: [{ type: "mrkdwn", text: "❌ Rejected by Ellie" }] },
       ],
     });
