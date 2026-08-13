@@ -11,6 +11,24 @@ interface UploadV2Result {
   files?: { id?: string; permalink?: string; url_private?: string }[];
 }
 
+// Slack's completeUploadExternal (which uploadV2 wraps) can return success before the
+// file has finished processing/thumbnailing — permalink/url_private are sometimes empty
+// on the immediate response even though the upload itself succeeded. Poll files.info
+// briefly to let that settle instead of treating it as a hard failure.
+async function waitForFileMetadata(client: WebClient, fileId: string): Promise<{ permalink: string; urlPrivate: string } | undefined> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const info = (await client.files.info({ file: fileId })) as {
+      file?: { permalink?: string; url_private?: string };
+    };
+    const { permalink, url_private: urlPrivate } = info.file ?? {};
+    if (permalink && urlPrivate) {
+      return { permalink, urlPrivate };
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
+  }
+  return undefined;
+}
+
 async function uploadBuffer(
   client: WebClient,
   { channelId, buffer, filename, initialComment }: { channelId: string; buffer: Buffer; filename: string; initialComment?: string }
@@ -23,11 +41,20 @@ async function uploadBuffer(
   })) as UploadV2Result;
 
   const uploaded = result.files?.[0];
-  if (!uploaded?.id || !uploaded.permalink || !uploaded.url_private) {
-    throw new Error("Slack file upload did not return expected file metadata");
+  if (!uploaded?.id) {
+    throw new Error("Slack file upload did not return a file ID");
   }
 
-  return { fileId: uploaded.id, permalink: uploaded.permalink, urlPrivate: uploaded.url_private };
+  const metadata =
+    uploaded.permalink && uploaded.url_private
+      ? { permalink: uploaded.permalink, urlPrivate: uploaded.url_private }
+      : await waitForFileMetadata(client, uploaded.id);
+
+  if (!metadata) {
+    throw new Error(`Slack file ${uploaded.id} uploaded but permalink/url_private never became available`);
+  }
+
+  return { fileId: uploaded.id, ...metadata };
 }
 
 // Downloads bytes from a source URL and uploads them to Slack as a real file, so the
