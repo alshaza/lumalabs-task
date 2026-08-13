@@ -7,8 +7,12 @@ export interface UploadedImage {
   urlPrivate: string;
 }
 
+// client.files.uploadV2() returns { ok, files: completion } where `completion` is the
+// array of raw files.completeUploadExternal responses (one per completion "job") — each
+// of THOSE is itself { ok, files: [...] } wrapping the actual file object one level
+// deeper than it looks. See @slack/web-api's WebClient.js filesUploadV2()/completeFileUploads().
 interface UploadV2Result {
-  files?: { id?: string; permalink?: string; url_private?: string }[];
+  files?: { ok?: boolean; files?: { id?: string; permalink?: string; url_private?: string }[] }[];
 }
 
 // Slack's completeUploadExternal (which uploadV2 wraps) can return success before the
@@ -40,7 +44,7 @@ async function uploadBuffer(
     ...(initialComment ? { initial_comment: initialComment } : {}),
   })) as UploadV2Result;
 
-  const uploaded = result.files?.[0];
+  const uploaded = result.files?.[0]?.files?.[0];
   if (!uploaded?.id) {
     throw new Error("Slack file upload did not return a file ID");
   }
