@@ -100,6 +100,8 @@ Not yet done: pushing the updated `slack-app-manifest.json` (`im:history`, `mess
 
 Not yet done: setting `SLACK_ADMIN_USER_ID`, `SLACK_APPROVAL_CHANNEL_ID`, and `SLACK_RESTRICT_APPROVAL_TO_ADMIN=true` in Railway/`.env` (documented in `.env.example`), and the Slack manual walkthrough end-to-end once the pending manifest push (above) is live.
 
+**UI bug: reuse/approved-prompt dropdown options rendered garbled for long or multi-line shot ideas.** `buildShotRequestView` (`src/slack/commands.ts`) built each dropdown option's text as `` `"${shotIdea}" — <@${requestedBy}>`.slice(0, 75) `` (Slack's select-option text cap). Two problems: multi-line shot ideas (containing a literal `\n`) wrapped mid-option instead of showing on one line, and the blind 75-char slice sometimes cut straight through the trailing `<@USERID>` mention tag, leaving broken raw text (`<@U`) instead of Slack's rendered mention pill. Fixed with a `truncateIdeaForOption` helper that collapses whitespace/newlines to a single line and truncates only the free-text idea portion, reserving room for the mention suffix so it's never appended in a partial/broken state.
+
 ## Unit economics
 
 Per docs.agents.lumalabs.ai pricing: `uni-1` image editing is **$0.0434/image**, `uni-1-max` is **$0.1030/image**. We default to `uni-1` (cheaper; `uni-1-max` is an easy env-level swap in `lumaClient.ts` if quality demands it).

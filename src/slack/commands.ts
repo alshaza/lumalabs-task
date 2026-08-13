@@ -37,6 +37,15 @@ interface SelectOption {
   description?: { type: "plain_text"; text: string };
 }
 
+// Slack select-option text caps at 75 chars total. Collapse newlines to spaces (multi-line
+// shot ideas otherwise wrap ugly mid-option) and truncate only the free-text portion, so a
+// fixed suffix appended afterward (e.g. a `<@USER>` mention) is never sliced mid-tag.
+function truncateIdeaForOption(shotIdea: string, reserveForSuffix: number): string {
+  const singleLine = shotIdea.replace(/\s+/g, " ").trim();
+  const maxLength = 75 - 2 /* quotes */ - reserveForSuffix;
+  return singleLine.length > maxLength ? `${singleLine.slice(0, Math.max(0, maxLength - 1))}…` : singleLine;
+}
+
 function productOption(sku: string, name: string, price: string | null): SelectOption {
   return {
     text: { type: "plain_text", text: `${name} (${sku})`.slice(0, 75) },
@@ -90,7 +99,7 @@ function buildShotRequestView({ products, selectedSku, shotIdeaValue, recentIdea
         options: [
           { text: { type: "plain_text" as const, text: "— write my own —" }, value: REUSE_PROMPT_NONE },
           ...approvedPrompts.map((p, i) => ({
-            text: { type: "plain_text" as const, text: `"${p.shotIdea}"`.slice(0, 75) },
+            text: { type: "plain_text" as const, text: `"${truncateIdeaForOption(p.shotIdea, 0)}"` },
             value: String(i),
           })),
         ],
@@ -111,10 +120,13 @@ function buildShotRequestView({ products, selectedSku, shotIdeaValue, recentIdea
         placeholder: { type: "plain_text", text: "Or start from someone else's shot idea" },
         options: [
           { text: { type: "plain_text" as const, text: "— write my own —" }, value: REUSE_PROMPT_NONE },
-          ...recentIdeas.map((r, i) => ({
-            text: { type: "plain_text" as const, text: `"${r.shotIdea}" — <@${r.requestedBy}>`.slice(0, 75) },
-            value: String(i),
-          })),
+          ...recentIdeas.map((r, i) => {
+            const suffix = ` — <@${r.requestedBy}>`;
+            return {
+              text: { type: "plain_text" as const, text: `"${truncateIdeaForOption(r.shotIdea, suffix.length)}"${suffix}` },
+              value: String(i),
+            };
+          }),
         ],
       },
     });
