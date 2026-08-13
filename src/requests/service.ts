@@ -41,3 +41,11 @@ export async function createRequest(input: CreateRequestInput) {
 export function getRequestById(id: string) {
   return prisma.generationRequest.findUnique({ where: { id } });
 }
+
+export function listRecentRequests(limit = 20) {
+  return prisma.generationRequest.findMany({
+    orderBy: { createdAt: "desc" },
+    take: limit,
+    include: { product: { select: { name: true } } },
+  });
+}

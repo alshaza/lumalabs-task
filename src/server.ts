@@ -30,6 +30,7 @@ app.use("/api", requestsRouter);
 if (env.slackBotToken && env.slackSigningSecret) {
   const { receiver } = await import("./slack/app.js");
   await import("./slack/commands.js");
+  await import("./slack/home.js");
   app.use(receiver.router);
   console.log("Slack integration enabled");
 } else {
