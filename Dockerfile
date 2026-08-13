@@ -9,7 +9,9 @@ COPY tsconfig.json ./
 COPY prisma ./prisma
 COPY src ./src
 
-ENV DATABASE_URL="postgresql://postgres:dsyXPVQfyELHXgHgfzpDIzWTByCOaEUs@postgres.railway.internal:5432/railway"
+# prisma generate only needs DATABASE_URL to be present for schema validation,
+# not a working connection — real value comes from Railway at runtime.
+ENV DATABASE_URL="postgresql://user:pass@localhost:5432/db"
 RUN npx prisma generate
 RUN npm run build
 

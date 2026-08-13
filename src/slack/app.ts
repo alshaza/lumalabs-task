@@ -1,5 +1,7 @@
-import { App, ExpressReceiver } from "@slack/bolt";
+import bolt from "@slack/bolt";
 import { env } from "../config.js";
+
+const { App, ExpressReceiver } = bolt;
 
 export const slackEnabled = Boolean(env.slackBotToken && env.slackSigningSecret);
 
