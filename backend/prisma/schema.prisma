@@ -1,0 +1,35 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Product {
+  sku       String              @id
+  name      String
+  category  String?
+  color     String?
+  material  String?
+  price     String?
+  photoUrl  String
+  shotIdea  String?
+  notes     String?
+  updatedAt DateTime            @updatedAt
+  requests  GenerationRequest[]
+}
+
+model GenerationRequest {
+  id          String   @id @default(uuid())
+  sku         String
+  product     Product  @relation(fields: [sku], references: [sku])
+  shotIdea    String
+  requestedBy String
+  status      String   @default("pending")
+  outputs     Json?
+  createdAt   DateTime @default(now())
+
+  @@index([sku])
+}

@@ -46,6 +46,16 @@ New catalog exports (e.g. the 40-product drop) come in via a Slack slash command
 2. Write-back to the drive folder / product page once something's approved.
 3. Prompt suggestions.
 
+## Build status
+
+**Backend (`backend/`) is built and verified locally.** Node.js + TypeScript (strict) + Express, PostgreSQL via Prisma (chosen over a JSON-file store for real scalability — durable, migratable, handles 10x catalog growth), Slack via `@slack/bolt` (mounted only once `SLACK_BOT_TOKEN`/`SLACK_SIGNING_SECRET` are set, so the REST API works standalone before a Slack app exists). Runs with one command: `docker compose up --build` (Postgres + backend, migrations run automatically, initial `data/catalog.csv` import on boot).
+
+Implemented: catalog CRUD + CSV upsert-by-SKU sync, the full request lifecycle (`POST /api/requests` → `GET /api/requests/:id`), and Slack handlers (`/shot-request` modal → DM with result; `/catalog-sync` → prompts for a file share, synced via a `message` event listener since Slack slash commands can't carry attachments — a wrinkle the original plan glossed over). Verified end-to-end against the sample 40-product CSV: health check, product list/lookup, idempotent re-sync, and a full create-request round trip.
+
+**Generation is intentionally stubbed** (`src/generation/lumaClient.ts`) — it echoes the source photo back instead of calling Luma, so the whole pipeline (Slack → request → "generated" image → DM) is provable without spending anything, while the real Luma Agents API integration is being scoped separately. The function signature (`{ sourceImageUrl, prompt } → { status, outputs[].url }`) is already the real contract, so wiring up the actual API call touches only this one file.
+
+Not yet done: real Luma generation, Slack app not yet created in a workspace (see plan's step-by-step), deployment.
+
 ## Unit economics
 
 *To be filled in once generation is wired up and we have real Luma pricing/latency numbers from a live run — not estimating this ahead of the actual API calls.*
